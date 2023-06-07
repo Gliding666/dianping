@@ -1,6 +1,11 @@
 server:
   port: 8081
 spring:
+  rabbitmq:
+    addresses: 192.168.85.129
+    username: admin
+    password: admin
+    virtual-host: /test
   application:
     name: dp
   datasource:

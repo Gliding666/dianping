@@ -13,6 +13,8 @@ import com.dp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -43,6 +45,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedissonClient redissonClient;
 
+    @Resource
+    RabbitTemplate rabbitTemplate;
+
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
     static {
         SECKILL_SCRIPT = new DefaultRedisScript<>();
@@ -53,7 +58,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024*1024);
     private static final ExecutorService SECKILL_ORDER_EXECUTOR = Executors.newSingleThreadExecutor();
 
-    @PostConstruct
+//    @PostConstruct
     private void init(){
         SECKILL_ORDER_EXECUTOR.submit(new VoucherOrderHandler());
     }
@@ -76,6 +81,18 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 }
             }
         }
+    }
+
+    @RabbitListener(queues = "orderQueue")
+    public void receiver(VoucherOrder voucherOrder){
+//        System.out.println("消息队列获取消息成功");
+        // 2. 创建订单
+        save(voucherOrder);
+        // 扣减库存
+        seckillVoucherService.update()
+                .setSql("stock = stock - 1")
+                .eq("voucher_id", voucherOrder.getVoucherId())
+                .ge("stock", 1).update();
     }
 
     @Override
@@ -103,7 +120,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         // 设置代金券id
         voucherOrder.setVoucherId(voucherId);
 
-        orderTasks.add(voucherOrder); // 添加到阻塞队列
+//        orderTasks.add(voucherOrder); // 添加到阻塞队列
+
+        //添加到RabbitMQ消息队列
+        rabbitTemplate.convertAndSend("amq.direct", "my-yyds", voucherOrder);
+
         // 返回订单id
         return Result.ok(orderId);
     }
@@ -139,6 +160,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 //            lock.unlock();
 //        }
 //    }
+
     @Transactional
     public Result createVoucherOrder(Long voucherId) {
         // 一人一单
