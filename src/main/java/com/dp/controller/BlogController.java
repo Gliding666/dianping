@@ -30,4 +30,8 @@ public class BlogController {
     public Result saveBlog(@RequestBody Blog blog) {
         return blogService.saveBlog(blog);
     }
+    @GetMapping("likes/{id}")
+    public Result queryBlogLikes(@PathVariable("id") Long blogId) {
+        return blogService.queryBlogLikes(blogId);
+    }
 }
