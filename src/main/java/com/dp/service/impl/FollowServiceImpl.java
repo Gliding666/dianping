@@ -67,8 +67,8 @@ public class FollowServiceImpl extends ServiceImpl<FollowMapper, Follow> impleme
         Long userId = UserHolder.getUser().getId();
         String key1 = "follows:" + userId;
         // 求交集
-        String key2 = "follows:" + followUserId;
-        Boolean isFollow = stringRedisTemplate.opsForSet().isMember(key1, key2);
+        String value = followUserId.toString();
+        Boolean isFollow = stringRedisTemplate.opsForSet().isMember(key1, value);
         return Result.ok(isFollow);
     }
 

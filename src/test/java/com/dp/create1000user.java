@@ -36,10 +36,14 @@ class create1000user {
         PrintWriter pw =  new PrintWriter(  new FileWriter(  "D:\\token.txt"  ) );
         String phone = "13812345678";
 
-        for(int i = 0; i < 1000; i ++ ) {
+        for(int i = 0; i < 10000; i ++ ) {
             phone = String.valueOf(Long.parseLong(phone) + i);
             // 创建新用户并保存
             User user = userService.query().eq("phone", phone).one();
+            if(user == null) {
+                user = userService.createUserWithPhone(phone);
+                userService.save(user);
+            }
             // 7.1 随机生成token，作为登录令牌
             String token = UUID.randomUUID().toString(true);
             pw.println(token);

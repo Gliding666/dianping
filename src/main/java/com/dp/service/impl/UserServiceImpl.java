@@ -3,8 +3,6 @@ package com.dp.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.util.RandomUtil;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.conditions.query.QueryChainWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dp.dto.LoginFormDTO;
 import com.dp.dto.Result;
@@ -13,14 +11,18 @@ import com.dp.entity.User;
 import com.dp.mapper.UserMapper;
 import com.dp.service.IUserService;
 import com.dp.utils.RegexUtils;
+import com.dp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.GetMapping;
 
 import javax.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -92,11 +94,64 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return Result.ok(isSuccess);
     }
 
+    @Override
+    public Result sign() {
+        Long userId = UserHolder.getUser().getId();
+        // 获取日期
+        LocalDateTime now = LocalDateTime.now();
+
+        String keySuffix = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+
+        String key = "sign:" + userId.toString() + keySuffix;
+        // 获取今天是本月的第几天
+        int dayOfMonth = now.getDayOfMonth();
+        // 写入 Redis SETBIT key offset 1
+        stringRedisTemplate.opsForValue().setBit(key,dayOfMonth - 1, true);
+        return Result.ok();
+    }
+
+    @Override
+    public Result signCount() {
+        Long userId = UserHolder.getUser().getId();
+        // 获取日期
+        LocalDateTime now = LocalDateTime.now();
+
+        String keySuffix = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+
+        String key = "sign:" + userId.toString() + keySuffix;
+        // 获取今天是本月的第几天
+        int dayOfMonth = now.getDayOfMonth();
+        // 获取本月截止今天为止的所有签到记录，返回的是一个十进制的数字
+        List<Long> result = stringRedisTemplate.opsForValue().bitField(
+                key, BitFieldSubCommands.create()
+                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth))
+                        .valueAt(0)
+        );
+
+        if(result == null || result.isEmpty()) {
+            return Result.ok();
+        }
+        Long num = result.get(0);
+        if(num == null || num == 0) {
+            return Result.ok();
+        }
+        int ans = 0;
+        while(num >  0) {
+            if((num & 1) == 1){
+                ans ++ ;
+                num >>>= 1;
+            }
+            else break;
+        }
+
+        return Result.ok(ans);
+    }
+
     public Result me(){
         return Result.ok();
     }
 
-    private User createUserWithPhone(String phone) {
+    public User createUserWithPhone(String phone) {
         User user = new User();
         user.setPhone(phone);
         user.setNickName(USER_NICK_NAME_PREFIX + RandomUtil.randomString(10));

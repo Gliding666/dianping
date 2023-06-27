@@ -14,4 +14,8 @@ public interface IUserService extends IService<User> {
     Result login(LoginFormDTO loginFormDTO);
 
     Result logout(HttpServletRequest request);
+
+    Result sign();
+
+    Result signCount();
 }
